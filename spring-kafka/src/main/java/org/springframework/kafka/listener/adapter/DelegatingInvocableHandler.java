@@ -149,6 +149,7 @@ public class DelegatingInvocableHandler {
 	public Object invoke(Message<?> message, Object... providedArgs) throws Exception { //NOSONAR
 		Class<? extends Object> payloadClass = message.getPayload().getClass();
 		InvocableHandlerMethod handler = getHandlerForPayload(payloadClass);
+		// 反射调用目标方法来进行处理
 		Object result = handler.invoke(message, providedArgs);
 		Expression replyTo = this.handlerSendTo.get(handler);
 		if (replyTo != null) {

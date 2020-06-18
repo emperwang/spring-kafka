@@ -129,12 +129,16 @@ public class ConcurrentMessageListenerContainer<K, V> extends AbstractMessageLis
 
 	/*
 	 * Under lifecycle lock.
+	 * 并行消费
 	 */
 	@Override
 	protected void doStart() {
 		if (!isRunning()) {
+			// 获取配置
 			ContainerProperties containerProperties = getContainerProperties();
 			TopicPartitionInitialOffset[] topicPartitions = containerProperties.getTopicPartitions();
+			// 由此可见 并行度不可以大于 分区数
+			// 这里进行了判断, 并且并行度大于分区数时,设置并行度和分区数是一样的
 			if (topicPartitions != null
 					&& this.concurrency > topicPartitions.length) {
 				this.logger.warn("When specific partitions are provided, the concurrency must be less than or "
@@ -143,7 +147,8 @@ public class ConcurrentMessageListenerContainer<K, V> extends AbstractMessageLis
 				this.concurrency = topicPartitions.length;
 			}
 			setRunning(true);
-
+			// 此处进行了 concurrency此循环,创建了concurrency个KafkaMessageListenerContainer来进行消息的消费
+			// 由此可见 此处的消费是并行的
 			for (int i = 0; i < this.concurrency; i++) {
 				KafkaMessageListenerContainer<K, V> container;
 				if (topicPartitions == null) {
@@ -162,6 +167,7 @@ public class ConcurrentMessageListenerContainer<K, V> extends AbstractMessageLis
 				container.setClientIdSuffix("-" + i);
 				container.setAfterRollbackProcessor(getAfterRollbackProcessor());
 				container.start();
+				// 保存所有的消费线程
 				this.containers.add(container);
 			}
 		}

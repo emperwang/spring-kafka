@@ -241,6 +241,7 @@ public abstract class MessagingMessageListenerAdapter<K, V> implements ConsumerS
 	protected final Object invokeHandler(Object data, Acknowledgment acknowledgment, Message<?> message,
 			Consumer<?, ?> consumer) {
 		try {
+			// 通过反射调用目标方法来对 消息进行处理
 			if (data instanceof List && !this.isConsumerRecordList) {
 				return this.handlerMethod.invoke(message, acknowledgment, consumer);
 			}

@@ -146,12 +146,13 @@ public class KafkaListenerEndpointRegistry implements DisposableBean, SmartLifec
 			boolean startImmediately) {
 		Assert.notNull(endpoint, "Endpoint must not be null");
 		Assert.notNull(factory, "Factory must not be null");
-
+		// 获取endpoint对应的id
 		String id = endpoint.getId();
 		Assert.hasText(id, "Endpoint id must not be empty");
 		synchronized (this.listenerContainers) {
 			Assert.state(!this.listenerContainers.containsKey(id),
 					"Another endpoint is already registered with id '" + id + "'");
+			// 创建container
 			MessageListenerContainer container = createListenerContainer(endpoint, factory);
 			this.listenerContainers.put(id, container);
 			if (StringUtils.hasText(endpoint.getGroup()) && this.applicationContext != null) {

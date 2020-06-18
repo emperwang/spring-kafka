@@ -232,7 +232,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		if (isRunning()) {
 			return;
 		}
+		// 获取配置
 		ContainerProperties containerProperties = getContainerProperties();
+		// 设置ack的模式
 		if (!this.consumerFactory.isAutoCommit()) {
 			AckMode ackMode = containerProperties.getAckMode();
 			if (ackMode.equals(AckMode.COUNT) || ackMode.equals(AckMode.COUNT_TIME)) {
@@ -247,6 +249,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		Object messageListener = containerProperties.getMessageListener();
 		Assert.state(messageListener != null, "A MessageListener is required");
 		if (containerProperties.getConsumerTaskExecutor() == null) {
+			// 如果没有设置线程池,则创建一个异步线程池
 			SimpleAsyncTaskExecutor consumerExecutor = new SimpleAsyncTaskExecutor(
 					(getBeanName() == null ? "" : getBeanName()) + "-C-");
 			containerProperties.setConsumerTaskExecutor(consumerExecutor);
@@ -261,8 +264,11 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			}
 			listenerType = ListenerUtils.determineListenerType(delegating);
 		}
+		// listenerConsumer具体的运行类
+		// 注意哦,这里是 kafkaMessagesListenerContainer 是单线程的消费
 		this.listenerConsumer = new ListenerConsumer(this.listener, listenerType);
 		setRunning(true);
+		// 提交任务运行起来
 		this.listenerConsumerFuture = containerProperties
 				.getConsumerTaskExecutor()
 				.submitListenable(this.listenerConsumer);
@@ -347,7 +353,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				: new LoggingCommitCallback();
 
 		private final Consumer<K, V> consumer;
-
+		// 保存 topic对应的分区offset信息
 		private final Map<String, Map<Integer, Long>> offsets = new HashMap<>();
 
 		private final GenericMessageListener<?> genericListener;
@@ -374,9 +380,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		private final boolean isRecordAck = this.containerProperties.getAckMode().equals(AckMode.RECORD);
 
 		private final boolean isBatchAck = this.containerProperties.getAckMode().equals(AckMode.BATCH);
-
+		// 保存ack的信息
 		private final BlockingQueue<ConsumerRecord<K, V>> acks = new LinkedBlockingQueue<>();
-
+		// 要设置的分区的offset的信息
 		private final BlockingQueue<TopicPartitionInitialOffset> seeks = new LinkedBlockingQueue<>();
 
 		private final ErrorHandler errorHandler;
@@ -428,6 +434,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		ListenerConsumer(GenericMessageListener<?> listener, ListenerType listenerType) {
 			Assert.state(!this.isAnyManualAck || !this.autoCommit,
 					"Consumer cannot be configured for auto commit for ackMode " + this.containerProperties.getAckMode());
+			// 调用工厂类创建consumer
 			final Consumer<K, V> consumer =
 					KafkaMessageListenerContainer.this.consumerFactory.createConsumer(
 							this.consumerGroupId,
@@ -445,9 +452,11 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			}
 			if (KafkaMessageListenerContainer.this.topicPartitions == null) {
 				if (this.containerProperties.getTopicPattern() != null) {
+					// 订阅 topic
 					consumer.subscribe(this.containerProperties.getTopicPattern(), rebalanceListener);
 				}
 				else {
+					// 订阅topic操作
 					consumer.subscribe(Arrays.asList(this.containerProperties.getTopics()), rebalanceListener);
 				}
 			}
@@ -460,6 +469,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 							new OffsetMetadata(topicPartition.initialOffset(), topicPartition.isRelativeToCurrent(),
 									topicPartition.getPosition()));
 				}
+				// 订阅分区操作
 				consumer.assign(new ArrayList<>(this.definedPartitions.keySet()));
 			}
 			GenericErrorHandler<?> errHandler = this.containerProperties.getGenericErrorHandler();
@@ -499,10 +509,12 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				this.taskSchedulerExplicitlySet = true;
 			}
 			else {
+				// 创建线程池哦
 				ThreadPoolTaskScheduler threadPoolTaskScheduler = new ThreadPoolTaskScheduler();
 				threadPoolTaskScheduler.initialize();
 				this.taskScheduler = threadPoolTaskScheduler;
 			}
+			// 这里提交一个定期任务 来检查 consumer
 			this.monitorTask = this.taskScheduler.scheduleAtFixedRate(() -> checkConsumer(),
 					this.containerProperties.getMonitorInterval() * 1000);
 			if (this.containerProperties.isLogContainerConfig()) {
@@ -708,6 +720,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			this.last = System.currentTimeMillis();
 			if (isRunning() && this.definedPartitions != null) {
 				try {
+					// 对分区的初始化
 					initPartitionsIfNeeded();
 				}
 				catch (Exception e) {
@@ -718,19 +731,24 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			long lastAlertAt = lastReceive;
 			while (isRunning()) {
 				try {
+					// 对提交的操作
 					if (!this.autoCommit && !this.isRecordAck) {
 						processCommits();
 					}
+					// offset的修改
 					processSeeks();
 					if (!this.consumerPaused && isPaused()) {
+						// 暂停消费
 						this.consumer.pause(this.consumer.assignment());
 						this.consumerPaused = true;
 						if (this.logger.isDebugEnabled()) {
 							this.logger.debug("Paused consumption from: " + this.consumer.paused());
 						}
+						//  发布 ConsumerPausedEvent 消息
 						publishConsumerPausedEvent(this.consumer.assignment());
 					}
 					this.polling.set(true);
+					// 消费消息
 					ConsumerRecords<K, V> records = this.consumer.poll(this.containerProperties.getPollTimeout());
 					if (!this.polling.compareAndSet(true, false)) {
 						/*
@@ -742,7 +760,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 						}
 						break;
 					}
+					// 更新时间
 					this.lastPoll = System.currentTimeMillis();
+					// 恢复消费
 					if (this.consumerPaused && !isPaused()) {
 						if (this.logger.isDebugEnabled()) {
 							this.logger.debug("Resuming consumption from: " + this.consumer.paused());
@@ -752,6 +772,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 						this.consumerPaused = false;
 						publishConsumerResumedEvent(paused);
 					}
+					// 消息打印
 					if (records != null && this.logger.isDebugEnabled()) {
 						this.logger.debug("Received: " + records.count() + " records");
 						if (records.count() > 0 && this.logger.isTraceEnabled()) {
@@ -766,6 +787,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 						if (this.containerProperties.getIdleEventInterval() != null) {
 							lastReceive = System.currentTimeMillis();
 						}
+						// todo  调用用户的方法  具体进行处理
 						invokeListener(records);
 					}
 					else {
@@ -869,12 +891,14 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				if (this.logger.isTraceEnabled()) {
 					this.logger.trace("Ack: " + record);
 				}
+				// 处理此record中对应的offset
 				processAck(record);
 				record = this.acks.poll();
 			}
 		}
 
 		private void processAck(ConsumerRecord<K, V> record) {
+			// 如果当前线程不是消费线程,则仍然保存起来
 			if (!Thread.currentThread().equals(this.consumerThread)) {
 				try {
 					this.acks.put(record);
@@ -884,9 +908,10 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					throw new KafkaException("Interrupted while storing ack", e);
 				}
 			}
-			else {
+			else { // 如果是立即提交offet
 				if (this.isManualImmediateAck) {
 					try {
+						// 则立即进行提交
 						ackImmediate(record);
 					}
 					catch (WakeupException e) {
@@ -894,25 +919,33 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					}
 				}
 				else {
+					// 如果不是立即ack,则把此record对应的topic的分区的offset信息保存起来
 					addOffset(record);
 				}
 			}
 		}
 
 		private void ackImmediate(ConsumerRecord<K, V> record) {
+			// 创建  topic分区 及其 对应的offset
 			Map<TopicPartition, OffsetAndMetadata> commits = Collections.singletonMap(
 					new TopicPartition(record.topic(), record.partition()),
 					new OffsetAndMetadata(record.offset() + 1));
+			// 打印
 			this.commitLogger.log(() -> "Committing: " + commits);
+			// 如果是同步提交
 			if (this.containerProperties.isSyncCommits()) {
+				// 则进行同步提交
 				this.consumer.commitSync(commits);
 			}
 			else {
+				// 异步提交
+				// 并设置了提交完成的回调方法
 				this.consumer.commitAsync(commits, this.commitCallback);
 			}
 		}
 
 		private void invokeListener(final ConsumerRecords<K, V> records) {
+			// 根据是否是batch模式,来进行处理
 			if (this.isBatchListener) {
 				invokeBatchListener(records);
 			}
@@ -922,6 +955,8 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		}
 
 		private void invokeBatchListener(final ConsumerRecords<K, V> records) {
+			// 可以看到这里 对records做了一个复制
+			// 最终给用户的消息是 复制品 recordList
 			List<ConsumerRecord<K, V>> recordList = new LinkedList<ConsumerRecord<K, V>>();
 			Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
 			while (iterator.hasNext()) {
@@ -932,6 +967,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					invokeBatchListenerInTx(records, recordList);
 				}
 				else {
+					// 真实调用
 					doInvokeBatchListener(records, recordList, null);
 				}
 			}
@@ -975,6 +1011,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		private RuntimeException doInvokeBatchListener(final ConsumerRecords<K, V> records,
 				List<ConsumerRecord<K, V>> recordList, @SuppressWarnings("rawtypes") Producer producer) throws Error {
 			try {
+				// 根据不同的类型调用处理
 				switch (this.listenerType) {
 					case ACKNOWLEDGING_CONSUMER_AWARE:
 						this.batchListener.onMessage(recordList,
@@ -995,7 +1032,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 						this.batchListener.onMessage(recordList);
 						break;
 				}
+				// 配置是手动提交 且  不是自动提交
 				if (!this.isAnyManualAck && !this.autoCommit) {
+					// 则把消息保存起来
 					for (ConsumerRecord<K, V> record : getHighestOffsetRecords(recordList)) {
 						this.acks.put(record);
 					}
@@ -1102,6 +1141,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 
 		private void doInvokeWithRecords(final ConsumerRecords<K, V> records) throws Error {
 			Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
+			// 每次处理一个record, 循环遍历所有record,来对每一个消息进行处理
 			while (iterator.hasNext()) {
 				final ConsumerRecord<K, V> record = iterator.next();
 				if (this.logger.isTraceEnabled()) {
@@ -1227,35 +1267,48 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 
 		private void processCommits() {
 			this.count += this.acks.size();
+			// 处理队列中的ack的信息
 			handleAcks();
 			long now;
+			// 获取ack的模式
 			AckMode ackMode = this.containerProperties.getAckMode();
+			// 如果不是手动 立即提交
 			if (!this.isManualImmediateAck) {
+				// 如果不是手动提交
 				if (!this.isManualAck) {
+					// 曾跟新 等待的offset
 					updatePendingOffsets();
 				}
+				// 当前的ack数量是否大于   配置的ackCount
 				boolean countExceeded = this.count >= this.containerProperties.getAckCount();
+				// countExceeded为真,且是ManualAck  BatchAck  RecordAck  AckMode.COUNT 这几个模式中一个
 				if (this.isManualAck || this.isBatchAck || this.isRecordAck
 						|| (ackMode.equals(AckMode.COUNT) && countExceeded)) {
 					if (this.logger.isDebugEnabled() && ackMode.equals(AckMode.COUNT)) {
 						this.logger.debug("Committing in AckMode.COUNT because count " + this.count
 								+ " exceeds configured limit of " + this.containerProperties.getAckCount());
 					}
+					// 则进行一次提交
 					commitIfNecessary();
 					this.count = 0;
 				}
 				else {
+					// 获取当前的时间
 					now = System.currentTimeMillis();
+					// 判断时间 间隔是否大于 配置的 ackTime
 					boolean elapsed = now - this.last > this.containerProperties.getAckTime();
+					// 如果ack模式是AckMode.TIME, 并且时间也够长
 					if (ackMode.equals(AckMode.TIME) && elapsed) {
 						if (this.logger.isDebugEnabled()) {
 							this.logger.debug("Committing in AckMode.TIME " +
 									"because time elapsed exceeds configured limit of " +
 									this.containerProperties.getAckTime());
 						}
+						// 则进行一次提交
 						commitIfNecessary();
 						this.last = now;
 					}
+					// 如果模式是根据数量或时间 AckMode.COUNT_TIME, 并且时间和数量满足其一
 					else if (ackMode.equals(AckMode.COUNT_TIME) && (elapsed || countExceeded)) {
 						if (this.logger.isDebugEnabled()) {
 							if (elapsed) {
@@ -1269,7 +1322,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 										this.containerProperties.getAckCount());
 							}
 						}
-
+						// 则进行一次提交
 						commitIfNecessary();
 						this.last = now;
 						this.count = 0;
@@ -1345,6 +1398,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 					}
 
 					try {
+						// 对分区设置 新的 offset
 						this.consumer.seek(topicPartition, newOffset);
 						if (this.logger.isDebugEnabled()) {
 							this.logger.debug("Reset " + topicPartition + " to offset " + newOffset);
@@ -1361,28 +1415,34 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		private void updatePendingOffsets() {
 			ConsumerRecord<K, V> record = this.acks.poll();
 			while (record != null) {
+				// 获取acks中的消息, 更新offset队列中保存的offset信息
 				addOffset(record);
 				record = this.acks.poll();
 			}
 		}
 
 		private void addOffset(ConsumerRecord<K, V> record) {
+			// 添加offset
 			this.offsets.computeIfAbsent(record.topic(), v -> new ConcurrentHashMap<>())
 					.compute(record.partition(), (k, v) -> v == null ? record.offset() : Math.max(v, record.offset()));
 		}
 
 		private void commitIfNecessary() {
+			// 根据offset队列消息创建要提交的offset信息
 			Map<TopicPartition, OffsetAndMetadata> commits = buildCommits();
 			if (this.logger.isDebugEnabled()) {
 				this.logger.debug("Commit list: " + commits);
 			}
+			// 要提交的信息不为空
 			if (!commits.isEmpty()) {
 				this.commitLogger.log(() -> "Committing: " + commits);
 				try {
+					// 设置的同步提交,则进行同步提交
 					if (this.containerProperties.isSyncCommits()) {
 						this.consumer.commitSync(commits);
 					}
 					else {
+						// 否则进行异步提交,并设置回调方法
 						this.consumer.commitAsync(commits, this.commitCallback);
 					}
 				}
@@ -1392,7 +1452,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				}
 			}
 		}
-
+		// 把offset队列中的信息,转换为可以提交的map
 		private Map<TopicPartition, OffsetAndMetadata> buildCommits() {
 			Map<TopicPartition, OffsetAndMetadata> commits = new HashMap<>();
 			for (Entry<String, Map<Integer, Long>> entry : this.offsets.entrySet()) {

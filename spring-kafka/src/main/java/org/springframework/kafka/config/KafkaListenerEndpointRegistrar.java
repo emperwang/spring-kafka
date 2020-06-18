@@ -135,6 +135,7 @@ public class KafkaListenerEndpointRegistrar implements BeanFactoryAware, Initial
 	protected void registerAllEndpoints() {
 		synchronized (this.endpointDescriptors) {
 			for (KafkaListenerEndpointDescriptor descriptor : this.endpointDescriptors) {
+				// 真正注册endpoint
 				this.endpointRegistry.registerListenerContainer(
 						descriptor.endpoint, resolveContainerFactory(descriptor));
 			}
@@ -174,6 +175,7 @@ public class KafkaListenerEndpointRegistrar implements BeanFactoryAware, Initial
 		Assert.notNull(endpoint, "Endpoint must be set");
 		Assert.hasText(endpoint.getId(), "Endpoint id must be set");
 		// Factory may be null, we defer the resolution right before actually creating the container
+		// 把endpoint和containerFactory封装为KafkaListenerEndpointDescriptor
 		KafkaListenerEndpointDescriptor descriptor = new KafkaListenerEndpointDescriptor(endpoint, factory);
 		synchronized (this.endpointDescriptors) {
 			if (this.startImmediately) { // Register and start immediately
@@ -181,6 +183,7 @@ public class KafkaListenerEndpointRegistrar implements BeanFactoryAware, Initial
 						resolveContainerFactory(descriptor), true);
 			}
 			else {
+				// 然后把 信息保存
 				this.endpointDescriptors.add(descriptor);
 			}
 		}

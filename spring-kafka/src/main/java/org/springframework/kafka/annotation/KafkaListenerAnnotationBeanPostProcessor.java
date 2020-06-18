@@ -252,6 +252,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 	public Object postProcessAfterInitialization(final Object bean, final String beanName) throws BeansException {
 		if (!this.nonAnnotatedClasses.contains(bean.getClass())) {
 			Class<?> targetClass = AopUtils.getTargetClass(bean);
+			// 解析目标类是否有 KafkaListener 注解
 			Collection<KafkaListener> classLevelListeners = findListenerAnnotations(targetClass);
 			final boolean hasClassLevelListeners = classLevelListeners.size() > 0;
 			final List<Method> multiMethods = new ArrayList<>();
@@ -265,12 +266,14 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 						}
 
 					});
+			// 注解是放在 class层面
 			if (hasClassLevelListeners) {
 				Set<Method> methodsWithHandler = MethodIntrospector.selectMethods(targetClass,
 						(ReflectionUtils.MethodFilter) method ->
 								AnnotationUtils.findAnnotation(method, KafkaHandler.class) != null);
 				multiMethods.addAll(methodsWithHandler);
 			}
+			// 注解没有放在方法上
 			if (annotatedMethods.isEmpty()) {
 				this.nonAnnotatedClasses.add(bean.getClass());
 				if (this.logger.isTraceEnabled()) {
@@ -278,10 +281,12 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 				}
 			}
 			else {
+				// 方法上的 @kafkaListener 注解的处理
 				// Non-empty set of methods
 				for (Map.Entry<Method, Set<KafkaListener>> entry : annotatedMethods.entrySet()) {
 					Method method = entry.getKey();
 					for (KafkaListener listener : entry.getValue()) {
+						// 对此方法处理
 						processKafkaListener(listener, method, bean, beanName);
 					}
 				}
@@ -354,8 +359,10 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 
 	protected void processKafkaListener(KafkaListener kafkaListener, Method method, Object bean, String beanName) {
 		Method methodToUse = checkProxy(method, bean);
+		// 把方法封装非 一个 MethodKafkaListenerEndpoint
 		MethodKafkaListenerEndpoint<K, V> endpoint = new MethodKafkaListenerEndpoint<>();
 		endpoint.setMethod(methodToUse);
+		// 继续处理此endpint,也就是完善此endpoint的需要的信息
 		processListener(endpoint, kafkaListener, bean, methodToUse, beanName);
 	}
 
@@ -397,15 +404,24 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		if (StringUtils.hasText(beanRef)) {
 			this.listenerScope.addListener(beanRef, bean);
 		}
+		// 保存bean
 		endpoint.setBean(bean);
+		// 消息处理方法 工厂
 		endpoint.setMessageHandlerMethodFactory(this.messageHandlerMethodFactory);
+		// id  注解上的,如果注解没有则自动生成一个
 		endpoint.setId(getEndpointId(kafkaListener));
+		// groupid设置,如果注解没有设置则使用id
 		endpoint.setGroupId(getEndpointGroupId(kafkaListener, endpoint.getId()));
+		// topic 分区信息
 		endpoint.setTopicPartitions(resolveTopicPartitions(kafkaListener));
+		// 保存topic
 		endpoint.setTopics(resolveTopics(kafkaListener));
+		// 保存topic的 正则匹配
 		endpoint.setTopicPattern(resolvePattern(kafkaListener));
+		// clientId的前缀
 		endpoint.setClientIdPrefix(resolveExpressionAsString(kafkaListener.clientIdPrefix(),
 				"clientIdPrefix"));
+		// container
 		String group = kafkaListener.containerGroup();
 		if (StringUtils.hasText(group)) {
 			Object resolvedGroup = resolveExpression(group);
@@ -413,7 +429,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 				endpoint.setGroup((String) resolvedGroup);
 			}
 		}
-
+		// containerFactory
 		KafkaListenerContainerFactory<?> factory = null;
 		String containerFactoryBeanName = resolve(kafkaListener.containerFactory());
 		if (StringUtils.hasText(containerFactoryBeanName)) {
@@ -427,12 +443,13 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 						+ " with id '" + containerFactoryBeanName + "' was found in the application context", ex);
 			}
 		}
-
+		// 保存 bean容器
 		endpoint.setBeanFactory(this.beanFactory);
 		String errorHandlerBeanName = resolveExpressionAsString(kafkaListener.errorHandler(), "errorHandler");
 		if (StringUtils.hasText(errorHandlerBeanName)) {
 			endpoint.setErrorHandler(this.beanFactory.getBean(errorHandlerBeanName, KafkaListenerErrorHandler.class));
 		}
+		// 注册
 		this.registrar.registerEndpoint(endpoint, factory);
 		if (StringUtils.hasText(beanRef)) {
 			this.listenerScope.removeListener(beanRef);
@@ -440,9 +457,11 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 	}
 
 	private String getEndpointId(KafkaListener kafkaListener) {
+		// 如果注解上有 id信息,则使用此
 		if (StringUtils.hasText(kafkaListener.id())) {
 			return resolve(kafkaListener.id());
 		}
+		// 没有则生成一个
 		else {
 			return GENERATED_ID_PREFIX + this.counter.getAndIncrement();
 		}
@@ -450,9 +469,12 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 
 	private String getEndpointGroupId(KafkaListener kafkaListener, String id) {
 		String groupId = null;
+		// 注解上设置了 groupid, 则使用
 		if (StringUtils.hasText(kafkaListener.groupId())) {
+			// el 表达式解析
 			groupId = resolveExpressionAsString(kafkaListener.groupId(), "groupId");
 		}
+		// 没有则使用 id
 		if (groupId == null && kafkaListener.idIsGroup() && StringUtils.hasText(kafkaListener.id())) {
 			groupId = id;
 		}

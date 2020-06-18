@@ -107,6 +107,7 @@ public class BatchMessagingMessageListenerAdapter<K, V> extends MessagingMessage
 	public void onMessage(List<ConsumerRecord<K, V>> records, Acknowledgment acknowledgment, Consumer<?, ?> consumer) {
 		Message<?> message;
 		if (!isConsumerRecordList()) {
+			// 把消费到的 record 转换为message
 			if (isMessageList()) {
 				List<Message<?>> messages = new ArrayList<>(records.size());
 				for (ConsumerRecord<K, V> record : records) {
@@ -121,10 +122,12 @@ public class BatchMessagingMessageListenerAdapter<K, V> extends MessagingMessage
 		else {
 			message = NULL_MESSAGE; // optimization since we won't need any conversion to invoke
 		}
+		// 打印
 		if (logger.isDebugEnabled()) {
 			logger.debug("Processing [" + message + "]");
 		}
 		try {
+			// 通过反射来调用 目标方法 对消息进行处理
 			Object result = invokeHandler(records, acknowledgment, message, consumer);
 			if (result != null) {
 				handleResult(result, records, message);

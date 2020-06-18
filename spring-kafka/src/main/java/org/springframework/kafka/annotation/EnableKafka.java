@@ -249,6 +249,8 @@ import org.springframework.context.annotation.Import;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
+// 次注解注入一个KafkaBootstrapConfiguration,此主要的功能就是注入 后置处理器 以及KafkaListenerEndpointRegistry
+// 后置处理器用来 解析 @KafkaListener注解; KafkaListenerEndpointRegistry 用来保存注册的endpoint
 @Import(KafkaBootstrapConfiguration.class)
 public @interface EnableKafka {
 }

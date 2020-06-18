@@ -42,7 +42,7 @@ public class HandlerAdapter {
 		this.invokerHandlerMethod = null;
 		this.delegatingHandler = delegatingHandler;
 	}
-
+	// 通过反射来调用目标方法来进行处理
 	public Object invoke(Message<?> message, Object... providedArgs) throws Exception { //NOSONAR
 		if (this.invokerHandlerMethod != null) {
 			return this.invokerHandlerMethod.invoke(message, providedArgs);

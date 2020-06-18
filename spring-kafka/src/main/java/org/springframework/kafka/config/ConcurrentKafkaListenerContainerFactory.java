@@ -50,9 +50,10 @@ public class ConcurrentKafkaListenerContainerFactory<K, V>
 	public void setConcurrency(Integer concurrency) {
 		this.concurrency = concurrency;
 	}
-
+	// 创建container实例
 	@Override
 	protected ConcurrentMessageListenerContainer<K, V> createContainerInstance(KafkaListenerEndpoint endpoint) {
+		// 获取分区信息
 		Collection<TopicPartitionInitialOffset> topicPartitions = endpoint.getTopicPartitions();
 		if (!topicPartitions.isEmpty()) {
 			ContainerProperties properties = new ContainerProperties(
@@ -63,6 +64,7 @@ public class ConcurrentKafkaListenerContainerFactory<K, V>
 			Collection<String> topics = endpoint.getTopics();
 			if (!topics.isEmpty()) {
 				ContainerProperties properties = new ContainerProperties(topics.toArray(new String[topics.size()]));
+				// 创建ConcurrentMessageListenerContainer 实例
 				return new ConcurrentMessageListenerContainer<K, V>(getConsumerFactory(), properties);
 			}
 			else {

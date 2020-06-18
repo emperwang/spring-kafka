@@ -45,6 +45,7 @@ public class KafkaBootstrapConfiguration {
 	@Bean(name = KafkaListenerConfigUtils.KAFKA_LISTENER_ANNOTATION_PROCESSOR_BEAN_NAME)
 	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 	public KafkaListenerAnnotationBeanPostProcessor kafkaListenerAnnotationProcessor() {
+		// 后置处理器, 用来解析 @Kafkalistener注解
 		return new KafkaListenerAnnotationBeanPostProcessor();
 	}
 

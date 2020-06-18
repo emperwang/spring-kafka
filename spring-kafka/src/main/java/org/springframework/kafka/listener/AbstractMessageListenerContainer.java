@@ -260,12 +260,15 @@ public abstract class AbstractMessageListenerContainer<K, V>
 
 	@Override
 	public final void start() {
+		// 检查groupid
 		checkGroupId();
 		synchronized (this.lifecycleMonitor) {
 			if (!isRunning()) {
 				Assert.isTrue(
 						this.containerProperties.getMessageListener() instanceof GenericMessageListener,
 						"A " + GenericMessageListener.class.getName() + " implementation must be provided");
+				// 真实启动的动作
+				// 由子类实现
 				doStart();
 			}
 		}
