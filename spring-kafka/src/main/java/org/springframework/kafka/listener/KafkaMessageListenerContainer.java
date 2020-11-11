@@ -226,7 +226,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		}
 		return Collections.emptyMap();
 	}
-
+	// 开始启动消费线程
 	@Override
 	protected void doStart() {
 		if (isRunning()) {
@@ -733,6 +733,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				try {
 					// 对提交的操作
 					if (!this.autoCommit && !this.isRecordAck) {
+						// 对offset的提交
+						// -- 重点---
+						// 可见手动提交 其实也并不是立即进行了提交操作, 同样也是进行了保存
 						processCommits();
 					}
 					// offset的修改
@@ -1012,38 +1015,47 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				List<ConsumerRecord<K, V>> recordList, @SuppressWarnings("rawtypes") Producer producer) throws Error {
 			try {
 				// 根据不同的类型调用处理
+				// 看见对 consumer_Aware 其实就是向 处理函数传递 consumer 函数
 				switch (this.listenerType) {
+					// 这相当于是向 用户处理函数 传递了 records ConsumerBatchAcknowledgment, consumer 三个参数
 					case ACKNOWLEDGING_CONSUMER_AWARE:
 						this.batchListener.onMessage(recordList,
 								this.isAnyManualAck
 										? new ConsumerBatchAcknowledgment(recordList)
 										: null, this.consumer);
 						break;
+					// 这相当于是向 用户处理函数 传递了 records ConsumerBatchAcknowledgment 三个参数
 					case ACKNOWLEDGING:
 						this.batchListener.onMessage(recordList,
 								this.isAnyManualAck
-										? new ConsumerBatchAcknowledgment(recordList)
+										? new ConsumerBatchAcknowledgment(recordList) // 可见手动提交时 是通过ConsumerBatchAcknowledgment进行的
 										: null);
 						break;
+					// 这相当于是向 用户处理函数 传递了 records consumer 参数
 					case CONSUMER_AWARE:
 						this.batchListener.onMessage(recordList, this.consumer);
 						break;
+					// 这相当于是向 用户处理函数 传递了 records 参数
 					case SIMPLE:
 						this.batchListener.onMessage(recordList);
 						break;
 				}
 				// 配置是手动提交 且  不是自动提交
+				// 则保存一下 记录
 				if (!this.isAnyManualAck && !this.autoCommit) {
 					// 则把消息保存起来
 					for (ConsumerRecord<K, V> record : getHighestOffsetRecords(recordList)) {
 						this.acks.put(record);
 					}
+					// 如果传递了producer则会把 offset 发送到事务
+					// 事务不是很了解 ??????
 					if (producer != null) {
 						sendOffsetsToTransaction(producer);
 					}
 				}
 			}
 			catch (RuntimeException e) {
+				// 出现异常,则 同样会保留一下 offset  记录
 				if (this.containerProperties.isAckOnError() && !this.autoCommit && producer == null) {
 					for (ConsumerRecord<K, V> record : getHighestOffsetRecords(recordList)) {
 						this.acks.add(record);
@@ -1268,15 +1280,16 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		private void processCommits() {
 			this.count += this.acks.size();
 			// 处理队列中的ack的信息
+			// 也就是把 acks中的offset信息  保存到 offsets中
 			handleAcks();
 			long now;
 			// 获取ack的模式
 			AckMode ackMode = this.containerProperties.getAckMode();
-			// 如果不是手动 立即提交
+			// 如果不是立即提交
 			if (!this.isManualImmediateAck) {
 				// 如果不是手动提交
 				if (!this.isManualAck) {
-					// 曾跟新 等待的offset
+					// 则更新 offsets 中的值
 					updatePendingOffsets();
 				}
 				// 当前的ack数量是否大于   配置的ackCount
@@ -1330,8 +1343,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				}
 			}
 		}
-
+		// 这里就是重置  某些分区的 offset
 		private void processSeeks() {
+			// 此seeks 可以进行 随时 添加
 			TopicPartitionInitialOffset offset = this.seeks.poll();
 			while (offset != null) {
 				if (this.logger.isTraceEnabled()) {
@@ -1339,13 +1353,15 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				}
 				try {
 					SeekPosition position = offset.getPosition();
+					// 没有值的话 则重置为null
 					if (position == null) {
 						this.consumer.seek(offset.topicPartition(), offset.initialOffset());
-					}
+					} // 重置到开始
 					else if (position.equals(SeekPosition.BEGINNING)) {
 						this.consumer.seekToBeginning(Collections.singletonList(offset.topicPartition()));
 					}
 					else {
+						// 重置到最后
 						this.consumer.seekToEnd(Collections.singletonList(offset.topicPartition()));
 					}
 				}
@@ -1551,7 +1567,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				// make a copy in case the listener alters the list
 				this.records = new LinkedList<ConsumerRecord<K, V>>(records);
 			}
-
+			// 手动提交  offset 操作
 			@Override
 			public void acknowledge() {
 				Assert.state(ListenerConsumer.this.isAnyManualAck,

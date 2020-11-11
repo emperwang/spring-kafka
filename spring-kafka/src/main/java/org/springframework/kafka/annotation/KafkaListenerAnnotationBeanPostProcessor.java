@@ -215,6 +215,8 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		}
 
 		if (this.registrar.getEndpointRegistry() == null) {
+			// 这里注入 KafkaListenerEndpointRegistry 到 registrar中
+			// 其中 KafkaListenerEndpointRegistry 是在KafkaBootstrapConfiguration 中创建的
 			if (this.endpointRegistry == null) {
 				Assert.state(this.beanFactory != null,
 						"BeanFactory must be set to find endpoint registry by bean name");
