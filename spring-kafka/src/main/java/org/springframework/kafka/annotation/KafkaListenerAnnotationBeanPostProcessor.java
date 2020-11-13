@@ -140,7 +140,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 
 	private final KafkaHandlerMethodFactoryAdapter messageHandlerMethodFactory =
 			new KafkaHandlerMethodFactoryAdapter();
-
+	// 保存endpoint以及 containerFactory的地方
 	private final KafkaListenerEndpointRegistrar registrar = new KafkaListenerEndpointRegistrar();
 
 	private final AtomicInteger counter = new AtomicInteger();
@@ -204,8 +204,9 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 
 	@Override
 	public void afterSingletonsInstantiated() {
+		// 设置 bean容器
 		this.registrar.setBeanFactory(this.beanFactory);
-
+		// 去容器中查找 KafkaListenerConfigurer 配置类,来对registrar进行配置
 		if (this.beanFactory instanceof ListableBeanFactory) {
 			Map<String, KafkaListenerConfigurer> instances =
 					((ListableBeanFactory) this.beanFactory).getBeansOfType(KafkaListenerConfigurer.class);
@@ -213,7 +214,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 				configurer.configureKafkaListeners(this.registrar);
 			}
 		}
-
+		// 这里给registrar 的endpointRegistry field设置值
 		if (this.registrar.getEndpointRegistry() == null) {
 			// 这里注入 KafkaListenerEndpointRegistry 到 registrar中
 			// 其中 KafkaListenerEndpointRegistry 是在KafkaBootstrapConfiguration 中创建的
@@ -241,6 +242,8 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		}
 
 		// Actually register all listeners
+		// 真正注册的地方
+		// 即把 endpoint 注册到 KafkaListenerEndpointRegistry中
 		this.registrar.afterPropertiesSet();
 	}
 
@@ -360,8 +363,11 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 	}
 
 	protected void processKafkaListener(KafkaListener kafkaListener, Method method, Object bean, String beanName) {
+		// 检测是否是 代理类
 		Method methodToUse = checkProxy(method, bean);
 		// 把方法封装非 一个 MethodKafkaListenerEndpoint
+		// 简单说就是 每一个 kafkaListener 就对应一个 endpoint
+		// 每一个endpoint 对应一个 container
 		MethodKafkaListenerEndpoint<K, V> endpoint = new MethodKafkaListenerEndpoint<>();
 		endpoint.setMethod(methodToUse);
 		// 继续处理此endpint,也就是完善此endpoint的需要的信息
@@ -399,7 +405,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		}
 		return method;
 	}
-
+	// 对 注解 kafkaListener的 继续处理
 	protected void processListener(MethodKafkaListenerEndpoint<?, ?> endpoint, KafkaListener kafkaListener, Object bean,
 			Object adminTarget, String beanName) {
 		String beanRef = kafkaListener.beanRef();
@@ -426,6 +432,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		// container
 		String group = kafkaListener.containerGroup();
 		if (StringUtils.hasText(group)) {
+			// 这里解析表达式,就会解析 springEL 表达式
 			Object resolvedGroup = resolveExpression(group);
 			if (resolvedGroup instanceof String) {
 				endpoint.setGroup((String) resolvedGroup);
@@ -437,6 +444,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		if (StringUtils.hasText(containerFactoryBeanName)) {
 			Assert.state(this.beanFactory != null, "BeanFactory must be set to obtain container factory by bean name");
 			try {
+				// 如果指定了 container bean的名字,则去容器中查找
 				factory = this.beanFactory.getBean(containerFactoryBeanName, KafkaListenerContainerFactory.class);
 			}
 			catch (NoSuchBeanDefinitionException ex) {
@@ -447,6 +455,7 @@ public class KafkaListenerAnnotationBeanPostProcessor<K, V>
 		}
 		// 保存 bean容器
 		endpoint.setBeanFactory(this.beanFactory);
+		// 错误处理器
 		String errorHandlerBeanName = resolveExpressionAsString(kafkaListener.errorHandler(), "errorHandler");
 		if (StringUtils.hasText(errorHandlerBeanName)) {
 			endpoint.setErrorHandler(this.beanFactory.getBean(errorHandlerBeanName, KafkaListenerErrorHandler.class));

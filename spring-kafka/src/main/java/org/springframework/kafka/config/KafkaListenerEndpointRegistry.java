@@ -149,11 +149,14 @@ public class KafkaListenerEndpointRegistry implements DisposableBean, SmartLifec
 		// 获取endpoint对应的id
 		String id = endpoint.getId();
 		Assert.hasText(id, "Endpoint id must not be empty");
+		// 简单说就是 每一个 kafkaListener 就对应一个 endpoint
+		// 每一个endpoint 对应一个 container
 		synchronized (this.listenerContainers) {
 			Assert.state(!this.listenerContainers.containsKey(id),
 					"Another endpoint is already registered with id '" + id + "'");
-			// 创建container
+			// 创建container ConcurrentMessageListenerContainer
 			MessageListenerContainer container = createListenerContainer(endpoint, factory);
+			// 记录创建的 container
 			this.listenerContainers.put(id, container);
 			if (StringUtils.hasText(endpoint.getGroup()) && this.applicationContext != null) {
 				List<MessageListenerContainer> containerGroup;
@@ -162,8 +165,10 @@ public class KafkaListenerEndpointRegistry implements DisposableBean, SmartLifec
 				}
 				else {
 					containerGroup = new ArrayList<MessageListenerContainer>();
+					// 注册到容器中, 名字就是 设置的 group
 					this.applicationContext.getBeanFactory().registerSingleton(endpoint.getGroup(), containerGroup);
 				}
+				// 那创建的 container记录下来
 				containerGroup.add(container);
 			}
 			if (startImmediately) {
@@ -180,7 +185,7 @@ public class KafkaListenerEndpointRegistry implements DisposableBean, SmartLifec
 	 */
 	protected MessageListenerContainer createListenerContainer(KafkaListenerEndpoint endpoint,
 			KafkaListenerContainerFactory<?> factory) {
-
+		// 创建了 ConcurrentMessageListenerContainer
 		MessageListenerContainer listenerContainer = factory.createListenerContainer(endpoint);
 
 		if (listenerContainer instanceof InitializingBean) {
@@ -235,6 +240,9 @@ public class KafkaListenerEndpointRegistry implements DisposableBean, SmartLifec
 
 	@Override
 	public void start() {
+		// 启动那些 listener container
+		// 简单说就是 每一个 kafkaListener 就对应一个 endpoint
+		// 每一个endpoint 对应一个 container
 		for (MessageListenerContainer listenerContainer : getListenerContainers()) {
 			startIfNecessary(listenerContainer);
 		}

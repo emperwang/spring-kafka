@@ -131,7 +131,7 @@ public class KafkaListenerEndpointRegistrar implements BeanFactoryAware, Initial
 	public void afterPropertiesSet() {
 		registerAllEndpoints();
 	}
-
+	// 注册endpoint
 	protected void registerAllEndpoints() {
 		synchronized (this.endpointDescriptors) {
 			for (KafkaListenerEndpointDescriptor descriptor : this.endpointDescriptors) {

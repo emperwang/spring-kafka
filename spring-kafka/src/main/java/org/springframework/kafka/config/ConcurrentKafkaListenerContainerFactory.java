@@ -68,6 +68,7 @@ public class ConcurrentKafkaListenerContainerFactory<K, V>
 				return new ConcurrentMessageListenerContainer<K, V>(getConsumerFactory(), properties);
 			}
 			else {
+				// 使用 topicPattern 来创建
 				ContainerProperties properties = new ContainerProperties(endpoint.getTopicPattern());
 				return new ConcurrentMessageListenerContainer<K, V>(getConsumerFactory(), properties);
 			}
