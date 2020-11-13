@@ -245,7 +245,9 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 				containerProperties.setAckTime(5000);
 			}
 		}
-
+		// 在container 中设置了listenter类型
+		// batchListener 创建BatchMessagingMessageListenerAdapter
+		// 否则创建 RecordMessagingMessageListenerAdapter
 		Object messageListener = containerProperties.getMessageListener();
 		Assert.state(messageListener != null, "A MessageListener is required");
 		if (containerProperties.getConsumerTaskExecutor() == null) {
@@ -256,6 +258,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 		}
 		Assert.state(messageListener instanceof GenericMessageListener, "Listener must be a GenericListener");
 		this.listener = (GenericMessageListener<?>) messageListener;
+		// 根据listener 来决定是什么监听类型
 		ListenerType listenerType = ListenerUtils.determineListenerType(this.listener);
 		if (this.listener instanceof DelegatingMessageListener) {
 			Object delegating = this.listener;
@@ -962,6 +965,7 @@ public class KafkaMessageListenerContainer<K, V> extends AbstractMessageListener
 			// 最终给用户的消息是 复制品 recordList
 			List<ConsumerRecord<K, V>> recordList = new LinkedList<ConsumerRecord<K, V>>();
 			Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
+			// 在这里把消息转换为list容器存储
 			while (iterator.hasNext()) {
 				recordList.add(iterator.next());
 			}

@@ -371,6 +371,7 @@ public abstract class AbstractKafkaListenerEndpoint<K, V>
 
 	@SuppressWarnings("unchecked")
 	private void setupMessageListener(MessageListenerContainer container, MessageConverter messageConverter) {
+		// 根据container 和 converter来创建 messageListener
 		Object messageListener = createMessageListener(container, messageConverter);
 		Assert.state(messageListener != null, "Endpoint [" + this + "] must provide a non null message listener");
 		if (this.retryTemplate != null) {

@@ -137,6 +137,7 @@ public class MethodKafkaListenerEndpoint<K, V> extends AbstractKafkaListenerEndp
 			MessageConverter messageConverter) {
 		Assert.state(this.messageHandlerMethodFactory != null,
 				"Could not create message listener - MessageHandlerMethodFactory not set");
+		// 创建 listener 实例
 		MessagingMessageListenerAdapter<K, V> messageListener = createMessageListenerInstance(messageConverter);
 		messageListener.setHandlerMethod(configureListenerAdapter(messageListener));
 		String replyTopic = getReplyTopic();
@@ -169,6 +170,7 @@ public class MethodKafkaListenerEndpoint<K, V> extends AbstractKafkaListenerEndp
 	protected MessagingMessageListenerAdapter<K, V> createMessageListenerInstance(MessageConverter messageConverter) {
 		MessagingMessageListenerAdapter<K, V> listener;
 		if (isBatchListener()) {
+			// 如果是 batchListener , 则创建 BatchMessagingMessageListenerAdapter
 			BatchMessagingMessageListenerAdapter<K, V> messageListener = new BatchMessagingMessageListenerAdapter<K, V>(
 					this.bean, this.method, this.errorHandler);
 			if (messageConverter instanceof BatchMessageConverter) {
@@ -177,6 +179,7 @@ public class MethodKafkaListenerEndpoint<K, V> extends AbstractKafkaListenerEndp
 			listener = messageListener;
 		}
 		else {
+			// 否则就创建 BatchMessagingMessageListenerAdapter
 			RecordMessagingMessageListenerAdapter<K, V> messageListener = new RecordMessagingMessageListenerAdapter<K, V>(
 					this.bean, this.method, this.errorHandler);
 			if (messageConverter instanceof RecordMessageConverter) {
