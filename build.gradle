@@ -1,6 +1,8 @@
 buildscript {
 	repositories {
+		maven {url 'http://maven.aliyun.com/nexus/content/groups/public/'}
 		maven { url 'https://repo.spring.io/plugins-release' }
+
 	}
 	dependencies {
 		classpath 'io.spring.gradle:dependency-management-plugin:1.0.3.RELEASE'
@@ -35,6 +37,9 @@ allprojects {
 	group = 'org.springframework.kafka'
 
 	repositories {
+		maven {url 'http://maven.aliyun.com/nexus/content/groups/public/'}
+		mavenLocal()
+		mavenCentral()
 		maven { url 'https://repo.spring.io/libs-milestone' }
 		if (version.endsWith('BUILD-SNAPSHOT') || project.hasProperty('platformVersion')) {
 			maven { url 'https://repo.spring.io/libs-snapshot' }
